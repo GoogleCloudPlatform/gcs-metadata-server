@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/BrandonY/gcs-metadata-server/internal/model"
-	"github.com/BrandonY/gcs-metadata-server/internal/repo"
+	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
+	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/repo"
 	"google.golang.org/api/iterator"
 )
 

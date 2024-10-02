@@ -1,4 +1,4 @@
-module github.com/BrandonY/gcs-metadata-server
+module github.com/GoogleCloudPlatform/gcs-metadata-server
 
 go 1.23.0
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/BrandonY/gcs-metadata-server/internal/model"
+	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
 )
 
 type Directory struct {
