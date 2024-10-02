@@ -2,6 +2,8 @@ package seeder
 
 import (
 	"context"
+	"fmt"
+	"log"
 
 	"cloud.google.com/go/storage"
 	"github.com/BrandonY/gcs-metadata-server/internal/model"
@@ -59,18 +61,23 @@ func (s *SeedService) Start(ctx context.Context) error {
 func (s *SeedService) insertFromIterator(it objectIterator) error {
 	for {
 		obj, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-
 		if err != nil {
-			return err
+			if err == iterator.Done {
+				break
+			}
+
+			return fmt.Errorf("Error retrieving iterator object: %v", err)
 		}
 
 		metadata := newMetadata(obj)
 
-		s.metadataRepo.Insert(metadata)
-		s.directoryRepo.UpsertParentDirs(metadata.Bucket, metadata.Name, metadata.Size, 1)
+		if err := s.metadataRepo.Insert(metadata); err != nil {
+			log.Printf("Error inserting metadata: %v", err)
+		}
+
+		if err := s.directoryRepo.UpsertParentDirs(metadata.Bucket, metadata.Name, metadata.Size, 1); err != nil {
+			log.Printf("Error upserting directories: %v", err)
+		}
 	}
 	return nil
 }
