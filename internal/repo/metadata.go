@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/BrandonY/gcs-metadata-server/internal/model"
+	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
 )
 
 type Metadata struct {

@@ -5,7 +5,7 @@ import (
 	"log"
 	"testing"
 
-	"github.com/BrandonY/gcs-metadata-server/internal/model"
+	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
 )
 
 func TestGetParentDir(t *testing.T) {

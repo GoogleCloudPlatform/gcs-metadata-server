@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/BrandonY/gcs-metadata-server/internal/repo"
-	"github.com/BrandonY/gcs-metadata-server/internal/seeder"
+	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/repo"
+	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/seeder"
 	"github.com/jessevdk/go-flags"
 )
 
