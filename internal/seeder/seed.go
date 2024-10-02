@@ -66,7 +66,7 @@ func (s *SeedService) insertFromIterator(it objectIterator) error {
 				break
 			}
 
-			return fmt.Errorf("Error retrieving iterator object: %v", err)
+			return fmt.Errorf("error retrieving iterator object: %v", err)
 		}
 
 		metadata := newMetadata(obj)
