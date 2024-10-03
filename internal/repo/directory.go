@@ -2,7 +2,6 @@ package repo
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
@@ -42,29 +41,31 @@ func getParentDir(dir string) string {
 
 // UpsertParentDirs updates all parent directories of an object name in one transaction
 func (d *Directory) UpsertParentDirs(bucket string, objName string, newSize int64, newCount int64) error {
-	// getUpsertQuery returns a full query string to insert or update a directory
-	getUpsertQuery := func(bucket string, name string, size int64, count int64) string {
-		parentDir := getParentDir(name)
-
-		return fmt.Sprintf(`
+	query := `
 			INSERT INTO directory (bucket, name, size, count, parent)
-			VALUES ('%s','%s', %d, %d,'%s')
+			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT(bucket, name)
 			DO UPDATE
-			SET size = size + %d,
-				count = count + %d;
-			`, bucket, name, size, count, parentDir, size, count)
-	}
+			SET size = size + $3,
+				count = count + $4;
+	`
 
 	if len(bucket) == 0 || len(objName) == 0 {
 		return errors.New("bucket or name argument is empty")
 	}
 
 	dirName := getParentDir(objName)
-	query := "BEGIN IMMEDIATE;"
+
+	tx, err := d.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
 	for {
-		query += getUpsertQuery(bucket, dirName, newSize, newCount)
+		if _, err = tx.Exec(query, bucket, dirName, newSize, newCount, getParentDir(dirName)); err != nil {
+			return err
+		}
 
 		// Last directory to update is root
 		if dirName == "/" {
@@ -73,9 +74,7 @@ func (d *Directory) UpsertParentDirs(bucket string, objName string, newSize int6
 		dirName = getParentDir(dirName)
 	}
 
-	query += "COMMIT;"
-
-	if _, err := d.DB.Exec(query); err != nil {
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	return nil
