@@ -60,7 +60,7 @@ func (d *Directory) UpsertParentDirs(bucket string, objName string, newSize int6
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() // no-op if commit succeeds
 
 	for {
 		if _, err = tx.Exec(query, bucket, dirName, newSize, newCount, getParentDir(dirName)); err != nil {

@@ -17,6 +17,8 @@ type options struct {
 	DatabaseUrl string `short:"d" long:"database-url" description:"Database URL in which to store metadata" required:"true"`
 }
 
+const maxDbConnections = 5
+
 func main() {
 	var opts options
 	if _, err := flags.Parse(&opts); err != nil {
@@ -25,7 +27,7 @@ func main() {
 
 	// Connect database
 	ctx := context.Background()
-	db := repo.NewDatabase(opts.DatabaseUrl, 5)
+	db := repo.NewDatabase(opts.DatabaseUrl, maxDbConnections)
 
 	if err := db.Connect(ctx); err != nil {
 		log.Fatalf("Error connecting to database: %v\n", err)
