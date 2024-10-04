@@ -54,6 +54,7 @@ func (e *exploreHandler) HandleExplore(w http.ResponseWriter, r *http.Request) {
 		Contents: contents,
 	}
 
+	w.Header().Set("Access-Control-Allow-Origin", "*") // TODO: remove in production
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Internal error", http.StatusInternalServerError)

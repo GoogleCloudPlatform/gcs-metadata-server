@@ -18,7 +18,7 @@ func NewExploreRepository(db *Database) ExploreRepository {
 	return &Explore{db}
 }
 
-// GetPath retrieves all directory contents of a given path
+// GetPath retrieves all directory contents of a given path including itself
 // It excludes directories whose size is 0
 func (e *Explore) GetPathContents(path, sort string) ([]*model.Metadata, error) {
 	if path == "/" {
@@ -26,15 +26,17 @@ func (e *Explore) GetPathContents(path, sort string) ([]*model.Metadata, error) 
 	}
 
 	queryContent := `
-		SELECT name, size, count
+		SELECT name, size, parent, count -- Include self 
+		FROM directory WHERE name = $1
+		UNION ALL
+		SELECT name, size, parent, count -- Include subdirectories
 		FROM directory
 		WHERE
 			name LIKE $1 || '%/' AND
 			NOT name LIKE $1 || '%/%/' AND
-			NOT name LIKE '/' AND
 			size > 0
 		UNION ALL
-		SELECT name, size, 0 as count
+		SELECT name, size, '' as parent, 0 as count -- Include subfiles
 		FROM metadata
 		WHERE
 			name LIKE $1 || '%' AND
