@@ -9,8 +9,8 @@ import (
 type SortType string
 
 const (
-	Size  SortType = "size"
-	Count SortType = "count"
+	SortBySize  SortType = "size"
+	SortByCount SortType = "count"
 )
 
 type Explore struct {
@@ -50,9 +50,9 @@ func (e *Explore) GetPathContents(path string, sort SortType) ([]*model.Metadata
 			NOT name LIKE $1 || '%/%'
 	`
 
-	if sort == Count {
+	if sort == SortByCount {
 		queryContent += " ORDER BY count DESC"
-	} else if sort == Size {
+	} else if sort == SortBySize {
 		queryContent += " ORDER BY size DESC"
 	} else {
 		return nil, errors.New("invalid sort parameter")

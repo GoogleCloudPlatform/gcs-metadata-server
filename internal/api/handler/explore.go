@@ -35,8 +35,8 @@ func (e *exploreHandler) HandleExplore(w http.ResponseWriter, r *http.Request) {
 	sortString := r.URL.Query().Get("sort")
 	sort := repo.SortType(strings.ToLower(sortString))
 	if len(sort) == 0 {
-		sort = repo.Size
-	} else if sort != repo.Size && sort != repo.Count {
+		sort = repo.SortBySize
+	} else if sort != repo.SortBySize && sort != repo.SortByCount {
 		http.Error(w, "Invalid sort parameter, please use 'size' or 'count'", http.StatusBadRequest)
 		return
 	}
