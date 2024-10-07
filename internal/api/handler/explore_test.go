@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
+	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/repo"
 )
 
 func TestHandleExplore(t *testing.T) {
@@ -84,6 +85,6 @@ type mockExploreRepository struct {
 	pathContents []*model.Metadata
 }
 
-func (m *mockExploreRepository) GetPathContents(path, sort string) ([]*model.Metadata, error) {
+func (m *mockExploreRepository) GetPathContents(path string, sort repo.SortType) ([]*model.Metadata, error) {
 	return m.pathContents, nil
 }

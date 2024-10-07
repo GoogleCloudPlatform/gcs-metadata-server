@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
 	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/repo"
@@ -22,19 +23,20 @@ func NewExploreHandler(exploreRepo repo.ExploreRepository) *exploreHandler {
 }
 
 func (e *exploreHandler) HandleExplore(w http.ResponseWriter, r *http.Request) {
-	// Normalize path param
+	// Normalize path param by adding slash(/) suffix if missing
 	path := r.PathValue("path")
 	if len(path) == 0 {
 		path = "/"
-	} else if path[len(path)-1] != '/' {
+	} else if !strings.HasSuffix(path, "/") {
 		path = path + "/"
 	}
 
 	// Validate sort query param
-	sort := r.URL.Query().Get("sort")
+	sortString := r.URL.Query().Get("sort")
+	sort := repo.SortType(strings.ToLower(sortString))
 	if len(sort) == 0 {
-		sort = "size"
-	} else if sort != "size" && sort != "count" {
+		sort = repo.Size
+	} else if sort != repo.Size && sort != repo.Count {
 		http.Error(w, "Invalid sort parameter, please use 'size' or 'count'", http.StatusBadRequest)
 		return
 	}

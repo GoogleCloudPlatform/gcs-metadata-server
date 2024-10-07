@@ -6,12 +6,19 @@ import (
 	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
 )
 
+type SortType string
+
+const (
+	Size  SortType = "size"
+	Count SortType = "count"
+)
+
 type Explore struct {
 	*Database
 }
 
 type ExploreRepository interface {
-	GetPathContents(path, sort string) ([]*model.Metadata, error)
+	GetPathContents(path string, sort SortType) ([]*model.Metadata, error)
 }
 
 func NewExploreRepository(db *Database) ExploreRepository {
@@ -20,7 +27,7 @@ func NewExploreRepository(db *Database) ExploreRepository {
 
 // GetPath retrieves all directory contents of a given path including itself
 // It excludes directories whose size is 0
-func (e *Explore) GetPathContents(path, sort string) ([]*model.Metadata, error) {
+func (e *Explore) GetPathContents(path string, sort SortType) ([]*model.Metadata, error) {
 	if path == "/" {
 		path = "" // handle root
 	}
@@ -43,9 +50,9 @@ func (e *Explore) GetPathContents(path, sort string) ([]*model.Metadata, error) 
 			NOT name LIKE $1 || '%/%'
 	`
 
-	if sort == "count" {
+	if sort == Count {
 		queryContent += " ORDER BY count DESC"
-	} else if sort == "size" {
+	} else if sort == Size {
 		queryContent += " ORDER BY size DESC"
 	} else {
 		return nil, errors.New("invalid sort parameter")
