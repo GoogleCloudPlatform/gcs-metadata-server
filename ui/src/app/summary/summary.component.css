@@ -1,0 +1,10 @@
+mat-card {
+  height: 100%;
+}
+
+mat-card-header {
+  font-size: 1.5rem;
+  margin: 0 auto;
+  padding-bottom: 1rem;
+  text-align: center;
+}

@@ -1,0 +1,25 @@
+<mat-card appearance="outlined">
+  <mat-card-content>
+    <div class="toggle-container">
+      <mat-button-toggle-group name="view" aria-label="View">
+        <mat-button-toggle
+          value="treemap"
+          (change)="onViewToggle($event)"
+          [checked]="view == 'treemap'"
+          >Treemap</mat-button-toggle
+        >
+        <mat-button-toggle
+          value="directory"
+          (change)="onViewToggle($event)"
+          [checked]="view == 'directory'"
+          >Directory</mat-button-toggle
+        >
+      </mat-button-toggle-group>
+    </div>
+    <mat-form-field>
+      <mat-label>Search</mat-label>
+      <input matInput />
+    </mat-form-field>
+    <!-- <button mat-stroked-button (click)="onBackClick()">Back</button> -->
+  </mat-card-content>
+</mat-card>
