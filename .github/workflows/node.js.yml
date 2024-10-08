@@ -31,5 +31,5 @@ jobs:
       working-directory: ./ui
     - run: npm run build --if-present
       working-directory: ./ui
-    - run: npm run test:headless
+    - run: npm test --browsers ChromeHeadless
       working-directory: ./ui
