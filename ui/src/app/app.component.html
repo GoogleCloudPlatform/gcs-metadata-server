@@ -1,3 +1,36 @@
-<main class="main">
-</main>
-<router-outlet />
+<div class="app">
+  <div class="content-wrapper">
+    <div class="header">
+      <div class="header-left">
+        <app-summary-bucket />
+      </div>
+      <div class="header-search">
+        <app-search-bar
+          [view]="view"
+          (onBackEvent)="goBack()"
+          (onViewChange)="onViewChange($event)"
+        />
+      </div>
+    </div>
+    <div class="main">
+      <div class="summary">
+        <app-summary [path]="pathStack[pathStack.length - 1]" />
+      </div>
+      <div class="viewer">
+        @if (directoryList$ && directoryList$.length) {
+          <app-viewer
+            [directoryList$]="directoryList$"
+            [currentPath]="pathStack[pathStack.length - 1]"
+            [view]="view"
+            (newPathEvent)="goTo($event)"
+            (onBackEvent)="goBack()"
+          />
+        } @else {
+          <div class="spinner-container">
+            <mat-spinner />
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>
