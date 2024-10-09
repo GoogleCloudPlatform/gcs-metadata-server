@@ -81,10 +81,63 @@ func TestHandleExplore(t *testing.T) {
 	}
 }
 
+func TestHandleSummary(t *testing.T) {
+	testCases := []struct {
+		name       string
+		path       string
+		wantStatus int
+	}{
+		{
+			"Valid path with trailing slash",
+			"///mock/",
+			http.StatusOK,
+		},
+		{
+			"Valid path",
+			"mock/",
+			http.StatusOK,
+		},
+		{
+			"Root path",
+			"/",
+			http.StatusOK,
+		},
+		{
+			"Empty path",
+			"",
+			http.StatusOK,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest("GET", "/summary/"+tc.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			rr := httptest.NewRecorder()
+			mockRepo := &mockExploreRepository{}
+
+			handler := NewExploreHandler(mockRepo)
+			handler.HandleSummary(rr, req)
+
+			if status := rr.Code; status != tc.wantStatus {
+				t.Errorf("status code mismatch: got %v want %v",
+					status, tc.wantStatus)
+			}
+		})
+	}
+}
+
 type mockExploreRepository struct {
 	pathContents []*model.Metadata
 }
 
 func (m *mockExploreRepository) GetPathContents(path string, sort repo.SortType) ([]*model.Metadata, error) {
 	return m.pathContents, nil
+}
+
+func (m *mockExploreRepository) GetPathSummary(path string) (*model.Summary, error) {
+	return &model.Summary{}, nil
 }
