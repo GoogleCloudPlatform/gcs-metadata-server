@@ -113,14 +113,15 @@ func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metada
 		}
 
 		// Calculate costs of every object and directory
+		// defaultLocation is used for all results until storing location from bucket is implemented
 		if len(metadata.StorageClass) > 0 { // object
-			cost, err := getPrice(defaultLocation, StorageClass(metadata.StorageClass), metadata.Size)
+			cost, err := getObjectCost(defaultLocation, StorageClass(metadata.StorageClass), metadata.Size)
 			if err != nil {
 				return nil, err
 			}
 			metadata.Cost = cost
 		} else { // directory
-			totalCost, err := getDirectoryTotalCost(defaultLocation, row.SizeStandard, row.SizeNearline, row.SizeColdline, row.SizeArchive)
+			totalCost, err := getDirectoryCost(defaultLocation, row.SizeStandard, row.SizeNearline, row.SizeColdline, row.SizeArchive)
 			if err != nil {
 				return nil, err
 			}

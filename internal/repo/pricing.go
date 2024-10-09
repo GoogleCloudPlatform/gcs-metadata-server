@@ -64,25 +64,45 @@ var locationPricing = map[Location]map[StorageClass]float64{
 	},
 }
 
-// GetPrice returns the price for a given storage class in a specific location.
-func getPrice(location Location, storageClass StorageClass, size int64) (float64, error) {
-	price, ok := locationPricing[location][storageClass]
+// getPrice returns the price for a given storage class in a specific location.
+func getPrice(costMap map[StorageClass]float64, storageClass StorageClass, size int64) (float64, error) {
+	price, ok := costMap[storageClass]
 	if !ok {
-		return 0, errors.New("invalid location or storage class")
+		return 0, errors.New("invalid storage class")
 	}
 
-	sizeGb := float64(size / bytesPerGB)
-	return price * sizeGb, nil
+	sizeGB := float64(size / bytesPerGB)
+	return price * sizeGB, nil
 }
 
-func getDirectoryTotalCost(location Location, sizeStandard, sizeNearline, sizeColdline, sizeArchive int64) (float64, error) {
+// getObjectCost returns the total cost for an object based on its storage class
+func getObjectCost(location Location, storageClass StorageClass, size int64) (float64, error) {
+	costMap, ok := locationPricing[location]
+	if !ok {
+		return 0, errors.New("invalid location")
+	}
+
+	cost, err := getPrice(costMap, storageClass, size)
+	if err != nil {
+		return 0, err
+	}
+	return cost, nil
+}
+
+// getDirectoryCost returns the total cost for a directory based on all its storage class' sizes
+func getDirectoryCost(location Location, sizeStandard, sizeNearline, sizeColdline, sizeArchive int64) (float64, error) {
 	var totalCost float64 = 0
+
+	costMap, ok := locationPricing[location]
+	if !ok {
+		return 0, errors.New("invalid location")
+	}
 
 	classes := []StorageClass{StorageStandard, StorageNearline, StorageColdline, StorageArchive}
 	sizes := []int64{sizeStandard, sizeNearline, sizeColdline, sizeArchive}
 
 	for i, size := range sizes {
-		cost, err := getPrice(location, classes[i], size)
+		cost, err := getPrice(costMap, classes[i], size)
 		if err != nil {
 			return 0, err
 		}
