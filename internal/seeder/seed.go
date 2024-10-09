@@ -36,7 +36,6 @@ func newMetadata(obj *storage.ObjectAttrs) *model.Metadata {
 		Created:      obj.Created,
 		Updated:      obj.Updated,
 	}
-
 }
 
 type objectIterator interface {
@@ -75,7 +74,7 @@ func (s *SeedService) insertFromIterator(it objectIterator) error {
 			log.Printf("Error inserting metadata: %v", err)
 		}
 
-		if err := s.directoryRepo.UpsertParentDirs(metadata.Bucket, metadata.Name, metadata.Size, 1); err != nil {
+		if err := s.directoryRepo.UpsertParentDirs(repo.StorageClass(metadata.StorageClass), metadata.Bucket, metadata.Name, metadata.Size, 1); err != nil {
 			log.Printf("Error upserting directories: %v", err)
 		}
 	}

@@ -24,16 +24,19 @@ const schema = `
 		size		INTEGER NOT NULL,
 		updated 	TIMESTAMP NOT NULL,
 		created		TIMESTAMP NOT NULL,
-		storage_class TEXT NOT NULL CHECK (storage_class IN ('STANDARD', 'NEARLINE', 'COLD', 'ARCHIVE')),
+		storage_class TEXT NOT NULL CHECK (storage_class IN ('STANDARD', 'NEARLINE', 'COLDLINE', 'ARCHIVE')),
 		PRIMARY KEY (bucket, name)
 	);
 	
 	CREATE TABLE directory (
-		bucket	TEXT NOT NULL,
-		name	TEXT NOT NULL,
-		size	INTEGER DEFAULT 0,
-		count	INTEGER DEFAULT 0,
-		parent	TEXT,
+		bucket			TEXT NOT NULL,
+		name			TEXT NOT NULL,
+		count			INTEGER DEFAULT 0,
+		size_standard 	INTEGER DEFAULT 0,
+		size_nearline 	INTEGER DEFAULT 0,
+		size_coldline	INTEGER DEFAULT 0,
+		size_archive 	INTEGER DEFAULT 0,
+		parent			TEXT,
 		FOREIGN KEY (parent) REFERENCES directory(name),
 		PRIMARY KEY (bucket, name)
 	);
