@@ -25,23 +25,22 @@ func NewExploreHandler(exploreRepo repo.ExploreRepository) *exploreHandler {
 func (e *exploreHandler) HandleExplore(w http.ResponseWriter, r *http.Request) {
 	// Normalize path param by adding slash(/) suffix if missing
 	path := r.PathValue("path")
-	if len(path) == 0 {
-		path = "/"
-	} else if !strings.HasSuffix(path, "/") {
+	if !strings.HasSuffix(path, "/") {
 		path = path + "/"
 	}
 
 	// Validate sort query param
 	sortString := r.URL.Query().Get("sort")
-	sort := repo.SortType(strings.ToLower(sortString))
-	if len(sort) == 0 {
-		sort = repo.SortBySize
-	} else if sort != repo.SortBySize && sort != repo.SortByCount {
+	sortBy := repo.SortType(strings.ToLower(sortString))
+
+	if len(sortBy) == 0 {
+		sortBy = repo.SortBySize
+	} else if sortBy != repo.SortBySize && sortBy != repo.SortByCount {
 		http.Error(w, "Invalid sort parameter, please use 'size' or 'count'", http.StatusBadRequest)
 		return
 	}
 
-	contents, err := e.exploreRepo.GetPathContents(path, sort)
+	contents, err := e.exploreRepo.GetPathContents(path, sortBy)
 	if err != nil {
 		log.Printf("Error retrieving path contents: %v", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)

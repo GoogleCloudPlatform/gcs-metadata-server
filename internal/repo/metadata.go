@@ -13,8 +13,8 @@ type Metadata struct {
 
 type MetadataRepository interface {
 	Insert(*model.Metadata) error
-	Update(bucket string, name string, size int64, updated time.Time) error
-	Delete(bucket string, name string) error
+	Update(bucket, name string, size int64, updated time.Time) error
+	Delete(bucket, name string) error
 }
 
 func NewMetadataRepository(db *Database) MetadataRepository {

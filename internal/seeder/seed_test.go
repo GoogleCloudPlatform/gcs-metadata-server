@@ -114,7 +114,7 @@ type mockDirectoryRepository struct {
 	calls int
 }
 
-func (d *mockDirectoryRepository) UpsertParentDirs(bucket string, objName string, newSize int64, newCount int64) error {
+func (d *mockDirectoryRepository) UpsertParentDirs(storageClass repo.StorageClass, bucket string, objName string, newSize int64, newCount int64) error {
 	d.calls++
 	return nil
 }

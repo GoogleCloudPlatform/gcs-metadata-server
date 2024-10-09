@@ -38,51 +38,70 @@ func TestGetParentDir(t *testing.T) {
 }
 
 func TestUpsertParentDirs(t *testing.T) {
+	type dir struct {
+		Name         string
+		SizeStandard int64 `db:"size_standard"`
+		SizeNearline int64 `db:"size_nearline"`
+		SizeColdline int64 `db:"size_coldline"`
+		SizeArchive  int64 `db:"size_archive"`
+		Count        int64
+	}
+
 	testCases := []struct {
 		name         string
 		metadataInDB []*model.Metadata
 		in           *model.Metadata
-		wantDir      *model.Directory
+		wantDirs     []*dir
 		wantErr      bool
 	}{
 		{
 			"Upserts nested directory file",
 			[]*model.Metadata{
-				{Bucket: "mock", Name: "mock-1/mock-2/file1", Size: 1},
-				{Bucket: "mock", Name: "mock-1/mock-2/file2", Size: 2},
+				{Bucket: "mock", Name: "mock-1/mock-2/file1", Size: 1, StorageClass: "STANDARD"},
+				{Bucket: "mock", Name: "mock-1/mock-2/file2", Size: 2, StorageClass: "NEARLINE"},
 			},
-			&model.Metadata{Bucket: "mock", Name: "file3", Size: 3},
-			&model.Directory{Name: "/", Size: 6, Count: 3},
+			&model.Metadata{Bucket: "mock", Name: "file3", Size: 3, StorageClass: "COLDLINE"},
+			[]*dir{
+				{Name: "/", SizeStandard: 1, SizeNearline: 2, SizeColdline: 3, Count: 3},
+				{Name: "mock-1/", SizeStandard: 1, SizeNearline: 2, SizeColdline: 0, Count: 2},
+				{Name: "mock-1/mock-2/", SizeStandard: 1, SizeNearline: 2, SizeColdline: 0, Count: 2},
+			},
 			false,
 		},
 		{
 			"Upserts nested directory file 2",
 			[]*model.Metadata{
-				{Bucket: "mock", Name: "mock-1/mock-2/file1", Size: 1},
-				{Bucket: "mock", Name: "mock-1/mock-2/file2", Size: 2},
-				{Bucket: "mock", Name: "file3", Size: 3},
+				{Bucket: "mock", Name: "mock-1/mock-2/file1", Size: 1, StorageClass: "STANDARD"},
+				{Bucket: "mock", Name: "mock-1/mock-2/file2", Size: 2, StorageClass: "NEARLINE"},
+				{Bucket: "mock", Name: "file3", Size: 3, StorageClass: "STANDARD"},
 			},
-			&model.Metadata{Bucket: "mock", Name: "mock-1/file4", Size: 1},
-			&model.Directory{Name: "mock-1/", Size: 4, Count: 3},
+			&model.Metadata{Bucket: "mock", Name: "mock-1/file4", Size: 1, StorageClass: "ARCHIVE"},
+			[]*dir{
+				{Name: "mock-1/", SizeStandard: 1, SizeNearline: 2, SizeArchive: 1, Count: 3},
+			},
 			false,
 		},
 		{
 			"Upserts root file directory",
 			[]*model.Metadata{
-				{Bucket: "mock", Name: "mock-1/mock-2/file1", Size: 1},
-				{Bucket: "mock", Name: "mock-1/mock-2/file2", Size: 2},
+				{Bucket: "mock", Name: "mock-1/mock-2/file1", Size: 1, StorageClass: "STANDARD"},
+				{Bucket: "mock", Name: "mock-1/mock-2/file2", Size: 2, StorageClass: "NEARLINE"},
 			},
-			&model.Metadata{Bucket: "mock", Name: "file3", Size: 3},
-			&model.Directory{Name: "/", Size: 6, Count: 3},
+			&model.Metadata{Bucket: "mock", Name: "file3", Size: 3, StorageClass: "COLDLINE"},
+			[]*dir{
+				{Name: "/", SizeStandard: 1, SizeNearline: 2, SizeColdline: 3, Count: 3},
+			},
 			false,
 		},
 		{
 			"Upserts trailing slash directory",
 			[]*model.Metadata{
-				{Bucket: "mock", Name: "///file", Size: 3},
+				{Bucket: "mock", Name: "///file", Size: 3, StorageClass: "STANDARD"},
 			},
-			&model.Metadata{Bucket: "mock", Name: "//test/file2", Size: 3},
-			&model.Directory{Name: "//test/", Size: 3, Count: 1},
+			&model.Metadata{Bucket: "mock", Name: "//test/file2", Size: 3, StorageClass: "NEARLINE"},
+			[]*dir{
+				{Name: "//test/", SizeNearline: 3, Count: 1},
+			},
 			false,
 		},
 		{
@@ -111,12 +130,12 @@ func TestUpsertParentDirs(t *testing.T) {
 			dirRepo := NewDirectoryRepository(db)
 
 			for _, m := range tc.metadataInDB {
-				if err := dirRepo.UpsertParentDirs(m.Bucket, m.Name, m.Size, 1); err != nil {
+				if err := dirRepo.UpsertParentDirs(StorageClass(m.StorageClass), m.Bucket, m.Name, m.Size, 1); err != nil {
 					log.Fatal(err)
 				}
 			}
 
-			if err := dirRepo.UpsertParentDirs(tc.in.Bucket, tc.in.Name, tc.in.Size, 1); err != nil {
+			if err := dirRepo.UpsertParentDirs(StorageClass(tc.in.StorageClass), tc.in.Bucket, tc.in.Name, tc.in.Size, 1); err != nil {
 				if tc.wantErr {
 					return
 				}
@@ -127,21 +146,35 @@ func TestUpsertParentDirs(t *testing.T) {
 				log.Fatal("Expected error but did pass")
 			}
 
-			var gotCount int64
-			var gotSize int64
+			for _, wantDir := range tc.wantDirs {
+				var gotDir dir
+				err := db.QueryRowx(`SELECT count, size_standard, size_nearline, size_coldline, size_archive 
+									FROM directory WHERE name = ?`, wantDir.Name).StructScan(&gotDir)
+				if err != nil {
+					t.Fatal(err)
+				}
 
-			err := db.QueryRow(`SELECT count, size FROM directory WHERE name = ?`, tc.wantDir.Name).Scan(&gotCount, &gotSize)
-			if err != nil {
-				t.Fatal(err)
+				if gotDir.Count != wantDir.Count {
+					t.Errorf("Directory count mismatch: got %d, want %d", gotDir.Count, wantDir.Count)
+				}
+
+				if gotDir.SizeStandard != wantDir.SizeStandard {
+					t.Errorf("Directory size standard mismatch: got %d, want %d", gotDir.SizeStandard, wantDir.SizeStandard)
+				}
+
+				if gotDir.SizeNearline != wantDir.SizeNearline {
+					t.Errorf("Directory size nearline mismatch: got %d, want %d", gotDir.SizeNearline, wantDir.SizeNearline)
+				}
+
+				if gotDir.SizeColdline != wantDir.SizeColdline {
+					t.Errorf("Directory size coldline mismatch: got %d, want %d", gotDir.SizeColdline, wantDir.SizeColdline)
+				}
+
+				if gotDir.SizeArchive != wantDir.SizeArchive {
+					t.Errorf("Directory size archive mismatch: got %d, want %d", gotDir.SizeArchive, wantDir.SizeArchive)
+				}
 			}
 
-			if gotCount != tc.wantDir.Count {
-				t.Errorf("Directory count mismatch: got %d, want %d", gotCount, tc.wantDir.Count)
-			}
-
-			if gotSize != tc.wantDir.Size {
-				t.Errorf("Directory size mismatch: got %d, want %d", gotSize, tc.wantDir.Size)
-			}
 		})
 	}
 }
