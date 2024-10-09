@@ -14,6 +14,7 @@ func New(db *repo.Database) *http.ServeMux {
 	exploreHandler := handler.NewExploreHandler(exploreRepo)
 
 	mux.HandleFunc("GET /explore/{path...}", exploreHandler.HandleExplore)
+	mux.HandleFunc("GET /summary/{path...}", exploreHandler.HandleSummary)
 
 	return mux
 }

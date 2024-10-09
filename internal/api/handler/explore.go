@@ -61,3 +61,23 @@ func (e *exploreHandler) HandleExplore(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 	}
 }
+
+func (e *exploreHandler) HandleSummary(w http.ResponseWriter, r *http.Request) {
+	// Normalize path param by adding slash(/) suffix if missing
+	path := r.PathValue("path")
+	if !strings.HasSuffix(path, "/") {
+		path = path + "/"
+	}
+
+	summary, err := e.exploreRepo.GetPathSummary(path)
+	if err != nil {
+		log.Printf("Error retrieving path summary: %v", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Access-Control-Allow-Origin", "*") // TODO: remove in production
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(summary); err != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+	}
+}

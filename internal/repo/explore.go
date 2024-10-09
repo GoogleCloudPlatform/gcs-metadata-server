@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -21,6 +22,7 @@ type Explore struct {
 
 type ExploreRepository interface {
 	GetPathContents(path string, sort SortType) ([]*model.Metadata, error)
+	GetPathSummary(path string) (*model.Summary, error)
 }
 
 func NewExploreRepository(db *Database) ExploreRepository {
@@ -132,4 +134,48 @@ func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metada
 	}
 
 	return pathContents, nil
+}
+
+func (e *Explore) GetPathSummary(path string) (*model.Summary, error) {
+	var summary model.Summary
+
+	query := `
+		SELECT
+			name,
+			size_standard,
+			size_nearline,
+			size_coldline,
+			size_archive	
+		FROM
+			directory
+		WHERE
+			name = $1;
+	`
+
+	row := e.DB.QueryRowx(query, path)
+	if err := row.StructScan(&summary); err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	// Compute pricing
+	storageClasses := []struct {
+		class StorageClass
+		size  *int64
+		cost  *float64
+	}{
+		{StorageStandard, &summary.Size.Standard, &summary.Cost.Standard},
+		{StorageNearline, &summary.Size.Nearline, &summary.Cost.Nearline},
+		{StorageColdline, &summary.Size.Coldline, &summary.Cost.Coldline},
+		{StorageArchive, &summary.Size.Archive, &summary.Cost.Archive},
+	}
+
+	for _, sc := range storageClasses {
+		cost, err := getObjectCost(defaultLocation, sc.class, *sc.size)
+		if err != nil {
+			return nil, err
+		}
+		*sc.cost = cost
+	}
+
+	return &summary, nil
 }
