@@ -10,11 +10,12 @@ import { MetadataObject } from '../../services/explore.service';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
+import { SizePipe } from '../../pipes/size.pipe';
 
 @Component({
   selector: 'app-table',
   standalone: true,
-  imports: [MatTableModule, MatProgressSpinnerModule, MatIconModule],
+  imports: [MatTableModule, MatProgressSpinnerModule, MatIconModule, SizePipe],
   templateUrl: './table.component.html',
   styleUrl: './table.component.css',
 })
@@ -43,17 +44,5 @@ export class TableComponent implements OnChanges {
     if (changes['directoryList$']) {
       this.directoryList$ = changes['directoryList$'].currentValue;
     }
-  }
-
-  formatBytes(bytes: number): string {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-
-    while (bytes >= 1024 && i < units.length - 1) {
-      bytes /= 1024;
-      i++;
-    }
-
-    return `${bytes.toFixed(1)} ${units[i]}`;
   }
 }
