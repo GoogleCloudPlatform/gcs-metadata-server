@@ -1,5 +1,15 @@
 <mat-card appearance="outlined">
-  <mat-card-header> Cost breakdown in<br />{{ path }} </mat-card-header>
+  <mat-card-header>
+    <h3 class="title">Cost breakdown in</h3>
+    <h3 class="path">{{ path }}</h3>
+  </mat-card-header>
   <mat-card-content>
+    @if (sizes && costs) {
+    <div *ngFor="let key of rows">
+      <h3>{{ key[0].toUpperCase() + key.slice(1) }}</h3>
+      <p>Size: {{ sizes[key] | size }}</p>
+      <p>Cost: ${{ costs[key].toFixed(2) }}</p>
+    </div>
+    }
   </mat-card-content>
 </mat-card>

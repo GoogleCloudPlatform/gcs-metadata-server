@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
+import { requestJson } from './api-request';
 
 const API_BASE_URL = environment.apiBaseUrl;
 
@@ -16,11 +17,23 @@ export interface ExploreResult {
   contents: MetadataObject[];
 }
 
+export type Cost = {
+  standard: number;
+  nearline: number;
+  coldline: number;
+  archive: number;
+}
+
+export type Size = {
+  standard: number;
+  nearline: number;
+  coldline: number;
+  archive: number;
+}
 export interface SummaryResult {
-  bucket: string;
   title: string;
-  count: number;
-  size: number;
+  cost: Cost;
+  size: Size;
 }
 
 @Injectable({
@@ -41,19 +54,35 @@ export class ExploreService {
 
   async getDir(path: string, sort: string): Promise<ExploreResult> {
     path = this.normalizePath(path);
+    try {
+      const json = await requestJson(`/explore/${path}?sort=${sort}`)
 
-    const response = await fetch(
-      `${API_BASE_URL}/explore/${path}?sort=${sort}`,
-    );
-    if (!response.ok) {
-      throw new Error(`Response status: ${response.status}`);
+      const title = json.path as string;
+      const contents = json.contents as MetadataObject[];
+
+      return { title, contents } as ExploreResult;
+    } catch (error) {
+      console.error(error)
     }
 
-    const json = await response.json();
+    return {} as ExploreResult;
+  }
 
-    const title = json.path as string;
-    const contents = json.contents as MetadataObject[];
+  async getSummary(path: string): Promise<SummaryResult> {
+    path = this.normalizePath(path);
 
-    return { title, contents } as ExploreResult;
+    try {
+      const json = await requestJson(`/summary/${path}`)
+
+      const title = json.path as string;
+      const cost = json.cost as Cost;
+      const size = json.size as Size;
+
+      return { title, cost, size } as SummaryResult;
+    } catch (error) {
+      console.error(error);
+    }
+
+    return {} as SummaryResult;
   }
 }
