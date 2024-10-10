@@ -6,7 +6,7 @@
   <mat-card-content>
     @if (sizes && costs) {
     <div *ngFor="let key of rows">
-      <h3>{{ key[0].toUpperCase() + key.slice(1) }}</h3>
+      <h3>{{ capitalize(key) }}</h3>
       <p>Size: {{ sizes[key] | size }}</p>
       <p>Cost: ${{ costs[key].toFixed(2) }}</p>
     </div>
