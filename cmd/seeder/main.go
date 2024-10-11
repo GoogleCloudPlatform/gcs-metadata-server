@@ -65,5 +65,8 @@ func main() {
 		log.Fatalf("Error while seeding: %v\n", err)
 	}
 
+	if err := db.CreateIndexes(); err != nil {
+		log.Fatalf("Error creating indexes: %v\n", err)
+	}
 	log.Printf("Seeding completed. Duration: %v\n", time.Since(start))
 }

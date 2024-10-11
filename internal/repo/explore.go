@@ -32,21 +32,8 @@ func NewExploreRepository(db *Database) ExploreRepository {
 // GetPath retrieves all directory contents of a given path including itself
 // It excludes directories whose size is 0
 func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metadata, error) {
-	type contentRow struct {
-		Name         string `db:"name"`
-		NameLength   int    `db:"name_length"`
-		StorageClass string `db:"storage_class"`
-		SizeStandard int64  `db:"size_standard"`
-		SizeNearline int64  `db:"size_nearline"`
-		SizeColdline int64  `db:"size_coldline"`
-		SizeArchive  int64  `db:"size_archive"`
-		Size         int64  `db:"size"`
-		Count        int64  `db:"count"`
-		Parent       string `db:"parent"`
-	}
-
-	if path == "/" {
-		path = "" // handle root
+	if path == "" {
+		path = "/"
 	}
 
 	queryContent := `
@@ -66,9 +53,8 @@ func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metada
 			parent
 		FROM directory
 		WHERE
-			name LIKE $1 || '%' AND
-			NOT name LIKE $1 || '%/%/' AND
-			size > 0
+			parent = $1 OR
+			name = $1
 		UNION ALL
 		SELECT 
 			name, 
@@ -80,11 +66,10 @@ func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metada
 			size, 
 			0 as count,
 			storage_class,
-			'' as parent 
+			parent 
 		FROM metadata
 		WHERE
-			name LIKE $1 || '%' AND
-			NOT name LIKE $1 || '%/%'
+			parent = $1
 	`
 
 	if sortBy != SortByCount && sortBy != SortBySize {
@@ -92,6 +77,19 @@ func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metada
 	}
 	queryContent += fmt.Sprintf(" ORDER BY %s DESC, name_length", sortBy)
 	queryContent += " LIMIT 100;"
+
+	type contentRow struct {
+		Name         string `db:"name"`
+		NameLength   int    `db:"name_length"`
+		StorageClass string `db:"storage_class"`
+		SizeStandard int64  `db:"size_standard"`
+		SizeNearline int64  `db:"size_nearline"`
+		SizeColdline int64  `db:"size_coldline"`
+		SizeArchive  int64  `db:"size_archive"`
+		Size         int64  `db:"size"`
+		Count        int64  `db:"count"`
+		Parent       string `db:"parent"`
+	}
 
 	rows, err := e.DB.Queryx(queryContent, path)
 	if err != nil {
@@ -132,7 +130,6 @@ func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metada
 
 		pathContents = append(pathContents, metadata)
 	}
-
 	return pathContents, nil
 }
 

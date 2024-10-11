@@ -24,8 +24,8 @@ func NewMetadataRepository(db *Database) MetadataRepository {
 func (m *Metadata) Insert(obj *model.Metadata) error {
 	query := `
 		INSERT INTO metadata 
-		(bucket, name, size, storage_class, created, updated)	
-		VALUES (?, ?, ?, ?, ?, ?);
+		(bucket, name, size, parent, storage_class, created, updated)	
+		VALUES (?, ?, ?, ?, ?, ?, ?);
 	`
 
 	if len(obj.Bucket) == 0 || len(obj.Name) == 0 {
@@ -36,6 +36,7 @@ func (m *Metadata) Insert(obj *model.Metadata) error {
 		obj.Bucket,
 		obj.Name,
 		obj.Size,
+		getParentDir(obj.Name),
 		obj.StorageClass,
 		obj.Created,
 		obj.Updated); err != nil {
