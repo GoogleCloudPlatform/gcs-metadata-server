@@ -24,7 +24,9 @@ const schema = `
 		size		INTEGER NOT NULL,
 		updated 	TIMESTAMP NOT NULL,
 		created		TIMESTAMP NOT NULL,
+		parent		TEXT,
 		storage_class TEXT NOT NULL CHECK (storage_class IN ('STANDARD', 'NEARLINE', 'COLDLINE', 'ARCHIVE')),
+		FOREIGN KEY (parent) REFERENCES parent(name),
 		PRIMARY KEY (bucket, name)
 	);
 	
@@ -98,4 +100,19 @@ func (db *Database) PingTable() (bool, error) {
 	}
 
 	return tableExists, nil
+}
+
+// CreateIndexes creates relevant indexes to improve query performance
+func (db *Database) CreateIndexes() error {
+	query := `
+		CREATE INDEX idx_metadata_parent    ON metadata(parent);
+		CREATE INDEX idx_directory_parent   ON directory(parent);
+		CREATE INDEX idx_directory_name		ON directory(name);
+		VACUUM; -- Repackage database to clean empty space
+	`
+
+	if _, err := db.Exec(query); err != nil {
+		return err
+	}
+	return nil
 }
