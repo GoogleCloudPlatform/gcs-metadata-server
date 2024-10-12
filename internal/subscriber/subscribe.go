@@ -76,14 +76,14 @@ func (s *SubscriberService) consumeMessage(ctx context.Context, msg *pubsub.Mess
 	var p payload
 	if err := json.Unmarshal([]byte(msg.Data), &p); err != nil {
 		log.Printf("Error unmarshalling message payload: %v\n", err)
-		msg.Nack()
+		msg.Nack() // TODO: replace with proper error handling for improperly formatted messages
 		return
 	}
 
 	inMetadata, err := newMetadata(p)
 	if err != nil {
 		log.Printf("Error parsing metadata: %v\n", err)
-		msg.Nack()
+		msg.Nack() // TODO: replace with proper error handling for improperly formatted messages
 		return
 	}
 	_ = inMetadata
