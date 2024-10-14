@@ -31,6 +31,7 @@ func (m *Metadata) Get(bucket, name string) (*model.Metadata, error) {
 		WHERE bucket = ? AND name = ?;	
 	`
 
+	// Select record and ignore empty results for services not to depend on database errors
 	var metadata model.Metadata
 	if err := m.DB.Get(&metadata, query, bucket, name); err != nil && err != sql.ErrNoRows {
 		return nil, err
