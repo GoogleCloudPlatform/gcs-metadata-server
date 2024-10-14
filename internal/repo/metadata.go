@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"database/sql"
 	"errors"
 	"time"
 
@@ -12,13 +13,29 @@ type Metadata struct {
 }
 
 type MetadataRepository interface {
+	Get(bucket string, name string) (*model.Metadata, error)
 	Insert(*model.Metadata) error
-	Update(bucket, name string, size int64, updated time.Time) error
+	Update(bucket, name, storageClass string, size int64, updated time.Time) error
 	Delete(bucket, name string) error
 }
 
 func NewMetadataRepository(db *Database) MetadataRepository {
 	return &Metadata{db}
+}
+
+// Get returns metadata object information. It returns an empty struct if metadata does not exist.
+func (m *Metadata) Get(bucket, name string) (*model.Metadata, error) {
+	query := `
+		SELECT name, parent, size, storage_class, created, updated
+		FROM metadata
+		WHERE bucket = ? AND name = ?;	
+	`
+
+	var metadata model.Metadata
+	if err := m.DB.Get(&metadata, query, bucket, name); err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	return &metadata, nil
 }
 
 func (m *Metadata) Insert(obj *model.Metadata) error {
@@ -45,15 +62,16 @@ func (m *Metadata) Insert(obj *model.Metadata) error {
 	return nil
 }
 
-func (m *Metadata) Update(bucket string, name string, size int64, updated time.Time) error {
+func (m *Metadata) Update(bucket, name, storageClass string, size int64, updated time.Time) error {
 	query := `
 		UPDATE metadata
-		SET size = ?,
-			updated = ?
-		WHERE bucket = ? AND name = ?;
+		SET storage_class = $1,
+		    size 		  = $2,
+			updated 	  = $3
+		WHERE bucket = $4 AND name = $5;
 	`
 
-	res, err := m.DB.Exec(query, size, updated, bucket, name)
+	res, err := m.DB.Exec(query, storageClass, size, updated, bucket, name)
 	if err != nil {
 		return err
 	}
