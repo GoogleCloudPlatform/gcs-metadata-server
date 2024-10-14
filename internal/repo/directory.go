@@ -16,6 +16,7 @@ type DirectoryRepository interface {
 	Insert(dir model.Directory) error
 	Delete(bucket string, name string) error
 	UpsertParentDirs(storageClass StorageClass, bucket string, objName string, newSize int64, newCount int64) error
+	UpsertArchiveParentDirs(oldStorageClass StorageClass, newStorageClass StorageClass, bucket, objName string, size int64) error
 }
 
 func NewDirectoryRepository(db *Database) DirectoryRepository {
@@ -38,6 +39,53 @@ func getParentDir(dir string) string {
 
 	// Remove remaining portion of last directory
 	return trimmedDir[:lastIndex+1]
+}
+
+// UpsertArchiveParentDirs reallocates storage class size on all parent directories for an object update by object versioning.
+//
+// If directories do not exist, they will be created using newStorageClass and a default count of 1
+// as a safeguard for dirty reads during seeding process.
+func (d *Directory) UpsertArchiveParentDirs(oldStorageClass StorageClass, newStorageClass StorageClass, bucket, objName string, size int64) error {
+	oldStorageColumn := "size_" + strings.ToLower(string(oldStorageClass))
+	newStorageColumn := "size_" + strings.ToLower(string(newStorageClass))
+
+	query := fmt.Sprintf(`
+		INSERT INTO directory (bucket, name, %[2]s, parent, count)
+		VALUES ($1, $2, $3, $4, 1)
+		ON CONFLICT(bucket, name)
+		DO UPDATE
+		SET %[1]s = %[1]s - $3,
+			%[2]s = %[2]s + $3;
+	`, oldStorageColumn, newStorageColumn)
+
+	if len(bucket) == 0 || len(objName) == 0 {
+		return errors.New("bucket or name argument is empty")
+	}
+
+	dirName := getParentDir(objName)
+
+	tx, err := d.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // no-op if commit succeeds
+
+	for {
+		if _, err = tx.Exec(query, bucket, dirName, size, getParentDir(dirName)); err != nil {
+			return err
+		}
+
+		// Last directory to update is root
+		if dirName == "/" {
+			break
+		}
+		dirName = getParentDir(dirName)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // UpsertParentDirs updates all parent directories of an object name in one transaction
