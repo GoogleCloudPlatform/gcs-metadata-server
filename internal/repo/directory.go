@@ -82,10 +82,7 @@ func (d *Directory) UpsertArchiveParentDirs(oldStorageClass StorageClass, newSto
 		dirName = getParentDir(dirName)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	return nil
+	return tx.Commit()
 }
 
 // UpsertParentDirs updates all parent directories of an object name in one transaction
