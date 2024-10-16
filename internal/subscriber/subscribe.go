@@ -74,66 +74,58 @@ func (s *SubscriberService) Start(ctx context.Context) error {
 	return nil
 }
 
-func nackLog(msg *pubsub.Message, err error) {
-	log.Printf("Subscriber error: %v\n", err)
-	msg.Nack() // TODO: Improve error handling by adding proper logging
-}
-
-// consumeMessage is a callback function for pubsub.Receive() which performs
-// updates to database according to incoming metadata.
+// processMessage handles incoming metadata and performs database operations based on the eventType of incoming *pubsub.Message
 //
-// Messages are expected to be unordered so the handling of incoming metadata has to
+// Messages are expected to be unordered. The handling of incoming metadata has to
 // be based on its update time and gracefully Nack()'d when necessary
-func (s *SubscriberService) consumeMessage(ctx context.Context, msg *pubsub.Message) {
+func processMessage(s *SubscriberService, msg *pubsub.Message) (ack bool, err error) {
+	// parse payload
 	var p payload
-	if err := json.Unmarshal(msg.Data, &p); err != nil {
-		nackLog(msg, err)
-		return
+	if err = json.Unmarshal(msg.Data, &p); err != nil {
+		return false, err
 	}
 
 	inMetadata, err := newMetadata(p)
 	if err != nil {
-		nackLog(msg, err)
-		return
+		return false, err
 	}
 
 	_, isReplaced := msg.Attributes["overwrittenByGeneration"]
 	eventType := msg.Attributes["eventType"]
 
-	switch eventType {
-	case storage.ObjectFinalizeEvent:
-		if err := s.handleFinalize(inMetadata); err != nil {
-			nackLog(msg, err)
-			return
-		}
-
-	case storage.ObjectDeleteEvent:
-		// Ignore replacement events
-		if isReplaced {
-			msg.Ack()
-			return
-		}
-
-		if err := s.handleDelete(inMetadata); err != nil {
-			nackLog(msg, err)
-			return
-		}
-	case storage.ObjectArchiveEvent:
-		// Ignore replacement events
-		if isReplaced {
-			msg.Ack()
-			return
-		}
-
-		if err := s.handleArchive(inMetadata); err != nil {
-			nackLog(msg, err)
-			return
-		}
-	default:
-		defaultErr := fmt.Errorf("unknown event type: %s", eventType)
-		nackLog(msg, defaultErr)
+	// Ignore replacement messages
+	if isReplaced {
+		return true, nil
 	}
 
+	switch eventType {
+	case storage.ObjectFinalizeEvent:
+		if err = s.handleFinalize(inMetadata); err != nil {
+			return false, err
+		}
+	case storage.ObjectDeleteEvent:
+		if err := s.handleDelete(inMetadata); err != nil {
+			return false, err
+		}
+	case storage.ObjectArchiveEvent:
+		if err := s.handleArchive(inMetadata); err != nil {
+			return false, err
+		}
+	default:
+		return false, fmt.Errorf("unknown event type: %s", eventType)
+	}
+
+	return true, nil
+}
+
+// consumeMessage is a callback function for pubsub.Receive() which handles
+// the acknowledgment of messages by calling processMessage()
+func (s *SubscriberService) consumeMessage(ctx context.Context, msg *pubsub.Message) {
+	ack, err := processMessage(s, msg)
+	if !ack {
+		log.Printf("message not acknowledged: %v\n", err)
+		msg.Nack()
+	}
 	msg.Ack()
 }
 
