@@ -1,20 +1,27 @@
 <mat-card class="table-card" appearance="outlined">
   <mat-card-header>
+    <mat-icon
+      class="refresh-icon"
+      aria-label="refresh icon"
+      aria-hidden="false"
+      fontIcon="refresh"
+      (click)="onRefresh()"
+    />
     <h3 class="title">{{ currentPath }}</h3>
   </mat-card-header>
   <mat-card-content class="table-container">
     @if (view == "directory") {
-      <app-table
-        [directoryList$]="directoryList$"
-        [currentPath]="currentPath"
-        (newPathEvent)="goTo($event)"
-        (onBackEvent)="goBack()"
-      />
+    <app-table
+      [directoryList$]="directoryList$"
+      [currentPath]="currentPath"
+      (newPathEvent)="goTo($event)"
+      (onBackEvent)="goBack()"
+    />
     } @else if (view == "treemap") {
-      <app-treemap
-        [directoryList$]="directoryList$"
-        (newPathEvent)="goTo($event)"
-      />
+    <app-treemap
+      [directoryList$]="directoryList$"
+      (newPathEvent)="goTo($event)"
+    />
     }
   </mat-card-content>
 </mat-card>

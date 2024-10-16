@@ -22,6 +22,7 @@
             [directoryList$]="directoryList$"
             [currentPath]="pathStack[pathStack.length - 1]"
             [view]="view"
+            (onRefreshEvent)="fetchPath()"
             (newPathEvent)="goTo($event)"
             (onBackEvent)="goBack()"
           />
