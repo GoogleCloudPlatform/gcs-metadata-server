@@ -124,6 +124,7 @@ func (s *SubscriberService) consumeMessage(ctx context.Context, msg *pubsub.Mess
 	if err := processMessage(s, msg); err != nil {
 		log.Printf("message not acknowledged: %v\n", err)
 		msg.Nack()
+		return
 	}
 	msg.Ack()
 }
