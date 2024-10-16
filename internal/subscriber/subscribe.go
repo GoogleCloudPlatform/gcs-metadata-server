@@ -78,16 +78,16 @@ func (s *SubscriberService) Start(ctx context.Context) error {
 //
 // Messages are expected to be unordered. The handling of incoming metadata has to
 // be based on its update time and gracefully Nack()'d when necessary
-func processMessage(s *SubscriberService, msg *pubsub.Message) (ack bool, err error) {
+func processMessage(s *SubscriberService, msg *pubsub.Message) error {
 	// parse payload
 	var p payload
-	if err = json.Unmarshal(msg.Data, &p); err != nil {
-		return false, err
+	if err := json.Unmarshal(msg.Data, &p); err != nil {
+		return err
 	}
 
 	inMetadata, err := newMetadata(p)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	_, isReplaced := msg.Attributes["overwrittenByGeneration"]
@@ -95,33 +95,33 @@ func processMessage(s *SubscriberService, msg *pubsub.Message) (ack bool, err er
 
 	// Ignore replacement messages
 	if isReplaced {
-		return true, nil
+		return nil
 	}
 
 	switch eventType {
 	case storage.ObjectFinalizeEvent:
 		if err = s.handleFinalize(inMetadata); err != nil {
-			return false, err
+			return err
 		}
 	case storage.ObjectDeleteEvent:
 		if err := s.handleDelete(inMetadata); err != nil {
-			return false, err
+			return err
 		}
 	case storage.ObjectArchiveEvent:
 		if err := s.handleArchive(inMetadata); err != nil {
-			return false, err
+			return err
 		}
 	default:
-		return false, fmt.Errorf("unknown event type: %s", eventType)
+		return fmt.Errorf("unknown event type: %s", eventType)
 	}
 
-	return true, nil
+	return nil
 }
 
 // consumeMessage is a callback function for pubsub.Receive() which handles
-// the acknowledgment of messages by calling processMessage()
+// the acknowledgment of messages based on processMessage() results
 func (s *SubscriberService) consumeMessage(ctx context.Context, msg *pubsub.Message) {
-	if ack, err := processMessage(s, msg); !ack {
+	if err := processMessage(s, msg); err != nil {
 		log.Printf("message not acknowledged: %v\n", err)
 		msg.Nack()
 	}
