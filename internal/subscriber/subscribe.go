@@ -2,6 +2,7 @@ package subscriber
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,15 +10,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"cloud.google.com/go/storage"
 	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
 	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/repo"
-)
-
-type EventType string
-
-const (
-	EventTypeFinalize EventType = "OBJECT_FINALIZE"
-	EventTypeDelete   EventType = "OBJECT_DELETE"
 )
 
 type payload struct {
@@ -27,6 +22,14 @@ type payload struct {
 	StorageClass string
 	Updated      time.Time
 	Created      time.Time
+}
+
+type Susbcriber interface {
+	Start(ctx context.Context) error
+	consumeMessage(ctx context.Context, msg *pubsub.Message)
+	handleFinalize(inMetadata *model.Metadata) error
+	handleArchive(inMetadata *model.Metadata) error
+	handleDelete(inMetadata *model.Metadata) error
 }
 
 type SubscriberService struct {
@@ -45,16 +48,6 @@ func NewSubscriberService(client *pubsub.Client, subscriptionId string, director
 	}
 }
 
-// Start initiates subscription process by listening to all messages at subscriptionId
-func (s *SubscriberService) Start(ctx context.Context) error {
-	sub := s.client.SubscriptionInProject(s.subscriptionId, s.client.Project())
-
-	if err := sub.Receive(ctx, s.consumeMessage); err != nil {
-		return fmt.Errorf("error receiving messages %w", err)
-	}
-	return nil
-}
-
 func newMetadata(p payload) (*model.Metadata, error) {
 	size, err := strconv.ParseInt(p.Size, 10, 64)
 	if err != nil {
@@ -66,46 +59,101 @@ func newMetadata(p payload) (*model.Metadata, error) {
 		Name:         p.Name,
 		Size:         size,
 		StorageClass: p.StorageClass,
-		Created:      p.Created,
 		Updated:      p.Updated,
+		Created:      p.Created,
 	}, nil
 }
 
+// Start initiates subscription process by listening to all messages at subscriptionId
+func (s *SubscriberService) Start(ctx context.Context) error {
+	sub := s.client.SubscriptionInProject(s.subscriptionId, s.client.Project())
+
+	if err := sub.Receive(ctx, s.consumeMessage); err != nil {
+		return fmt.Errorf("error receiving messages %w", err)
+	}
+	return nil
+}
+
+func nackLog(msg *pubsub.Message, err error) {
+	log.Printf("Subscriber error: %v\n", err)
+	msg.Nack() // TODO: Improve error handling by adding proper logging
+}
+
+// consumeMessage is a callback function for pubsub.Receive() which performs
+// updates to database according to incoming metadata.
+//
+// Messages are expected to be unordered so the handling of incoming metadata has to
+// be based on its update time and gracefully Nack()'d when necessary
 func (s *SubscriberService) consumeMessage(ctx context.Context, msg *pubsub.Message) {
-	// Parse payload
 	var p payload
-	if err := json.Unmarshal([]byte(msg.Data), &p); err != nil {
-		log.Printf("Error unmarshalling message payload: %v\n", err)
-		msg.Nack() // TODO: replace with proper error handling for improperly formatted messages
+	if err := json.Unmarshal(msg.Data, &p); err != nil {
+		nackLog(msg, err)
 		return
 	}
 
 	inMetadata, err := newMetadata(p)
 	if err != nil {
-		log.Printf("Error parsing metadata: %v\n", err)
-		msg.Nack() // TODO: replace with proper error handling for improperly formatted messages
+		nackLog(msg, err)
 		return
 	}
-	_ = inMetadata
 
-	eventType := EventType(msg.Attributes["eventType"])
-	_, isUpdate := msg.Attributes["overwroteGeneration"] // 'overwroteGeneration' is only included in update events
-	_ = isUpdate
+	_, isReplaced := msg.Attributes["overwrittenByGeneration"]
+	_ = isReplaced
+	eventType := msg.Attributes["eventType"]
 
-	// Handle update/insert events
-	if eventType == EventTypeFinalize {
-		// Check if message is newer than existing metadata
-
-		if isUpdate {
-			// Handle update
-		} else {
-			// Handle insert
+	switch eventType {
+	case storage.ObjectFinalizeEvent:
+		if err := s.handleFinalize(inMetadata); err != nil {
+			nackLog(msg, err)
+			return
 		}
-	}
-
-	// Handle delete event
-	if eventType == EventTypeDelete {
+	default:
+		defaultErr := fmt.Errorf("unknown event type: %s", eventType)
+		nackLog(msg, defaultErr)
 	}
 
 	msg.Ack()
+}
+
+// handleFinalize takes incoming metadata and determines to insert or update
+// based on if metadata already exists and is newer
+func (s *SubscriberService) handleFinalize(inMetadata *model.Metadata) error {
+	existingMetadata, err := s.metadataRepo.Get(inMetadata.Bucket, inMetadata.Name)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("error getting existing metadata: %w", err)
+	}
+
+	// Check if incoming metadata is necessary to handle
+	if existingMetadata != nil {
+		if existingMetadata.Updated.After(inMetadata.Updated) {
+			return nil
+		}
+
+		if existingMetadata.StorageClass != inMetadata.StorageClass {
+			// TODO: pass to handleArchive()
+			return nil
+		}
+	}
+
+	// Insert if metadata does not exist
+	if existingMetadata == nil {
+		if err := s.metadataRepo.Insert(inMetadata); err != nil {
+			return fmt.Errorf("error inserting metadata: %w", err)
+		}
+		if err := s.directoryRepo.UpsertParentDirs(repo.StorageClass(inMetadata.StorageClass), inMetadata.Bucket, inMetadata.Name, inMetadata.Size, 1); err != nil {
+			return fmt.Errorf("error upserting parent directories: %w", err)
+		}
+
+	} else {
+		// Update metadata
+		if err := s.metadataRepo.Update(inMetadata.Bucket, inMetadata.Name, inMetadata.StorageClass, inMetadata.Size, inMetadata.Updated); err != nil {
+			return fmt.Errorf("error updating metadata: %w", err)
+		}
+
+		sizeDiff := inMetadata.Size - existingMetadata.Size
+		if err := s.directoryRepo.UpsertParentDirs(repo.StorageClass(inMetadata.StorageClass), inMetadata.Bucket, inMetadata.Name, sizeDiff, 0); err != nil {
+			return fmt.Errorf("error upserting parent directories: %w", err)
+		}
+	}
+	return nil
 }
