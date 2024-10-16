@@ -121,8 +121,7 @@ func processMessage(s *SubscriberService, msg *pubsub.Message) (ack bool, err er
 // consumeMessage is a callback function for pubsub.Receive() which handles
 // the acknowledgment of messages by calling processMessage()
 func (s *SubscriberService) consumeMessage(ctx context.Context, msg *pubsub.Message) {
-	ack, err := processMessage(s, msg)
-	if !ack {
+	if ack, err := processMessage(s, msg); !ack {
 		log.Printf("message not acknowledged: %v\n", err)
 		msg.Nack()
 	}
