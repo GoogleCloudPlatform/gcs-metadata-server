@@ -35,22 +35,22 @@ func TestGetMetadata(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name      string
-		bucket    string
-		objName   string
-		wantEmpty bool
+		name    string
+		bucket  string
+		objName string
+		wantErr bool
 	}{
 		{
-			name:      "Get existing metadata",
-			bucket:    "mock",
-			objName:   "mock-object",
-			wantEmpty: false,
+			name:    "Get existing metadata",
+			bucket:  "mock",
+			objName: "mock-object",
+			wantErr: false,
 		},
 		{
-			name:      "non-existent object should return empty object",
-			bucket:    "fake",
-			objName:   "fake",
-			wantEmpty: true,
+			name:    "Fails when getting non-existent metadata",
+			bucket:  "fake",
+			objName: "fake",
+			wantErr: true,
 		},
 	}
 
@@ -58,13 +58,17 @@ func TestGetMetadata(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := metadataRepo.Get(tc.bucket, tc.objName)
 			if err != nil {
+				if tc.wantErr {
+					return
+				}
 				t.Fatal(err)
 			}
 
+			if tc.wantErr {
+				t.Fatal("Expected error but did pass")
+			}
+
 			if got.Name != tc.objName {
-				if len(got.Name) == 0 && tc.wantEmpty {
-					return
-				}
 				t.Fatalf("got %s, want %s", got.Name, tc.objName)
 			}
 		})
