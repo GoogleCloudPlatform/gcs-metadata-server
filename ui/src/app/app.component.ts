@@ -42,6 +42,8 @@ export class AppComponent {
     this.fetchPath();
   }
 
+  /** fetchPath refreshes directoryList based on last path in pathStack
+   */
   async fetchPath() {
     let path = this.pathStack[this.pathStack.length - 1];
     if (!path) return;
@@ -78,5 +80,9 @@ export class AppComponent {
       this.pathStack = this.pathStack.slice(0, -1);
       this.fetchPath();
     }
+  }
+
+  refresh() {
+    this.fetchPath();
   }
 }
