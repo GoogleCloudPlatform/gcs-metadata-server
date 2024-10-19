@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	cloud.google.com/go/pubsub v1.44.0
-	cloud.google.com/go/storage v1.44.0
+	cloud.google.com/go/storage v1.45.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/mattn/go-sqlite3 v1.14.24
