@@ -27,15 +27,15 @@ mat-card-content {
   direction: rtl;
 }
 
-.refresh-icon {
+.icon {
   cursor:pointer;
 }
 
-.refresh-icon:hover {
+.icon:hover {
   transform: scale(1.1);
   transition: transform 0.1s;
 }
 
-.refresh-icon:active {
+.icon:active {
   transform: scale(0.9);
 }
