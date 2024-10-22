@@ -1,7 +1,14 @@
 <mat-card class="table-card" appearance="outlined">
   <mat-card-header>
     <mat-icon
-      class="refresh-icon"
+      class="icon"
+      aria-label="arrow back"
+      aria-hidden="false"
+      fontIcon="arrow_back"
+      (click)="goBack()"
+    />
+    <mat-icon
+      class="icon"
       aria-label="refresh icon"
       aria-hidden="false"
       fontIcon="refresh"
@@ -21,6 +28,7 @@
     <app-treemap
       [directoryList$]="directoryList$"
       (newPathEvent)="goTo($event)"
+      (onBackEvent)="goBack()"
     />
     }
   </mat-card-content>
