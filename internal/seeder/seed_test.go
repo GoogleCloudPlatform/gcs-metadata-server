@@ -1,6 +1,7 @@
 package seeder
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -10,13 +11,16 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func TestReadFromIterator(t *testing.T) {
+func TestInsertFromIterator(t *testing.T) {
 	testCases := []struct {
-		name string
-		it   *testObjectIterator
+		name       string
+		it         *testObjectIterator
+		wantCalls  int
+		wantErr    bool
+		wantErrMsg string
 	}{
 		{
-			name: "Succeeds iterating through objects",
+			name: "Inserts all objects from the iterator",
 			it: &testObjectIterator{
 				items: []*storage.ObjectAttrs{
 					{
@@ -37,59 +41,82 @@ func TestReadFromIterator(t *testing.T) {
 					},
 				},
 			},
+			wantCalls: 2,
+			wantErr:   false,
 		},
 		{
-			name: "Succeeds if iterator is empty",
-			it: &testObjectIterator{
-				items: []*storage.ObjectAttrs{},
-			},
-		},
-		{
-			name: "Does not return errors if item data is malformed",
+			name: "Does not insert if object name is empty",
 			it: &testObjectIterator{
 				items: []*storage.ObjectAttrs{
 					{
 						Bucket:       "mock",
-						Size:         -1,
+						Name:         "",
+						Size:         1,
 						StorageClass: "mock",
+						Created:      time.Now(),
+						Updated:      time.Now(),
 					},
 				},
 			},
+			wantCalls: 0,
+			wantErr:   false,
+		},
+		{
+			name: "Handles iterator errors",
+			it: &testObjectIterator{
+				items: []*storage.ObjectAttrs{},
+				err:   errors.New("iterator error"),
+			},
+			wantCalls: 0,
+			wantErr:   true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockMetadataRepo := &mockMetadataRepository{}
-			mockDirRepo := &mockDirectoryRepository{}
-
+			mockBatchWriter := &mockBatchWriter{}
 			s := &SeedService{
-				metadataRepo:  mockMetadataRepo,
-				directoryRepo: mockDirRepo,
+				batchWriter: mockBatchWriter,
 			}
 
-			err := s.insertFromIterator(tc.it)
-			if err != nil {
+			if err := s.insertFromIterator(tc.it); err != nil {
+				if tc.wantErr {
+					return
+				}
 				t.Fatal(err)
 			}
 
-			if mockMetadataRepo.calls != len(tc.it.items) {
-				t.Errorf("Metadata Insert calls mismatch: got %d, want %d", mockMetadataRepo.calls, len(tc.it.items))
+			if tc.wantErr {
+				t.Errorf("Expected error but did pass")
 			}
 
-			if mockDirRepo.calls != len(tc.it.items) {
-				t.Errorf("Directory Upsert calls mismatch: got %d, want %d", mockDirRepo.calls, len(tc.it.items))
+			if mockBatchWriter.calls != tc.wantCalls {
+				t.Errorf("BatchWriter Add calls mismatch: got %d, want %d", mockBatchWriter.calls, tc.wantCalls)
 			}
 		})
 	}
 }
 
+type mockBatchWriter struct {
+	repo.BatchWriterRepository
+	calls int
+}
+
+func (m *mockBatchWriter) Add(metadata *model.Metadata) {
+	m.calls++
+}
+
 type testObjectIterator struct {
 	items []*storage.ObjectAttrs
 	index int
+	err   error
 }
 
 func (t *testObjectIterator) Next() (*storage.ObjectAttrs, error) {
+	if t.err != nil {
+		return nil, t.err
+	}
+
 	if t.index >= len(t.items) {
 		return nil, iterator.Done
 	}
@@ -97,24 +124,4 @@ func (t *testObjectIterator) Next() (*storage.ObjectAttrs, error) {
 	obj := t.items[t.index]
 	t.index++
 	return obj, nil
-}
-
-type mockMetadataRepository struct {
-	repo.MetadataRepository
-	calls int
-}
-
-func (m *mockMetadataRepository) Insert(metadata *model.Metadata) error {
-	m.calls++
-	return nil
-}
-
-type mockDirectoryRepository struct {
-	repo.DirectoryRepository
-	calls int
-}
-
-func (d *mockDirectoryRepository) UpsertParentDirs(storageClass repo.StorageClass, bucket string, objName string, newSize int64, newCount int64) error {
-	d.calls++
-	return nil
 }

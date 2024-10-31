@@ -17,7 +17,12 @@ type options struct {
 	DatabaseUrl string `short:"d" long:"database-url" description:"Database URL in which to store metadata" required:"true"`
 }
 
-const maxDbConnections = 1
+const (
+	maxDbConnections = 1
+	maxSemaphores    = 1000
+	flushInterval    = 10 * time.Second
+	batchSize        = 10000
+)
 
 func main() {
 	var opts options
@@ -52,7 +57,7 @@ func main() {
 		log.Fatalf("Error creating storage client: %v\n", err)
 	}
 
-	seedService := seeder.NewSeedService(client, opts.BucketId, db, 10000, 10*time.Second)
+	seedService := seeder.NewSeedService(client, opts.BucketId, db, maxSemaphores, batchSize, flushInterval)
 
 	// Begin seeding
 	start := time.Now()

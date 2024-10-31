@@ -15,16 +15,16 @@ import (
 type SeedService struct {
 	client        *storage.Client
 	bucketId      string
-	directoryRepo repo.DirectoryRepository
-	metadataRepo  repo.MetadataRepository
-	batchWriter   *repo.BatchWriter
+	batchWriter   repo.BatchWriterRepository
+	maxSemaphores int
 }
 
-func NewSeedService(client *storage.Client, bucketId string, db *repo.Database, batchSize int, flushInterval time.Duration) *SeedService {
+func NewSeedService(client *storage.Client, bucketId string, db *repo.Database, maxSemaphores, batchSize int, flushInterval time.Duration) *SeedService {
 	return &SeedService{
-		client:      client,
-		bucketId:    bucketId,
-		batchWriter: repo.NewBatchWriter(db, batchSize, flushInterval),
+		client:        client,
+		bucketId:      bucketId,
+		batchWriter:   repo.NewBatchWriter(db, batchSize, flushInterval),
+		maxSemaphores: maxSemaphores,
 	}
 }
 
@@ -66,7 +66,7 @@ func (s *SeedService) seed(ctx context.Context, b *storage.BucketHandle) error {
 	dirChan := make(chan string)
 	var wg sync.WaitGroup
 
-	semaphore := make(chan struct{}, 1000)
+	semaphore := make(chan struct{}, s.maxSemaphores)
 
 	// Start with the root directory
 	wg.Add(1)
@@ -79,9 +79,10 @@ func (s *SeedService) seed(ctx context.Context, b *storage.BucketHandle) error {
 	return nil
 }
 
+// traverseRecursive iterates through bucket directories and invokes a new goroutine for each new directory found
 func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHandle, dir string, dirChan chan<- string, wg *sync.WaitGroup, semaphore chan struct{}) {
 	defer wg.Done()
-	defer func() { <-semaphore }() // Release after the recursive call finishes
+	defer func() { <-semaphore }()
 
 	it := b.Objects(ctx, &storage.Query{Prefix: dir, Delimiter: "/", IncludeFoldersAsPrefixes: true})
 	for {
@@ -91,7 +92,7 @@ func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHa
 		}
 		if err != nil {
 			fmt.Printf("Error iterating through objects: %v\n", err)
-			return // Stop listing directories on error
+			return
 		}
 
 		if attrs.Prefix != "" {
@@ -113,7 +114,6 @@ func (s *SeedService) insertFromIterator(it objectIterator) error {
 			if err == iterator.Done {
 				break
 			}
-
 			return fmt.Errorf("error retrieving iterator object: %v", err)
 		}
 

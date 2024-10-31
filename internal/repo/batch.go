@@ -20,7 +20,14 @@ type BatchWriter struct {
 	wg            sync.WaitGroup
 }
 
-func NewBatchWriter(db *Database, batchSize int, flushInterval time.Duration) *BatchWriter {
+type BatchWriterRepository interface {
+	Start(ctx context.Context)
+	Stop()
+	Add(metadata *model.Metadata)
+	run(ctx context.Context)
+}
+
+func NewBatchWriter(db *Database, batchSize int, flushInterval time.Duration) BatchWriterRepository {
 	return &BatchWriter{
 		db:            db,
 		metadataRepo:  NewMetadataRepository(db),
