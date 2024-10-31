@@ -107,6 +107,10 @@ func processMessage(s *SubscriberService, msg *pubsub.Message) error {
 		if err := s.handleDelete(inMetadata); err != nil {
 			return err
 		}
+	case storage.ObjectMetadataUpdateEvent:
+		if err := s.handleArchive(inMetadata); err != nil {
+			return err
+		}
 	case storage.ObjectArchiveEvent:
 		if err := s.handleArchive(inMetadata); err != nil {
 			return err
@@ -114,7 +118,7 @@ func processMessage(s *SubscriberService, msg *pubsub.Message) error {
 	default:
 		return fmt.Errorf("unknown event type: %s", eventType)
 	}
-
+	log.Printf("Event: %s Affected: %s\n", eventType, inMetadata.Name)
 	return nil
 }
 

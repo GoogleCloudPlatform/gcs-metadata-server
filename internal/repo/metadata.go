@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"database/sql"
 	"errors"
 	"time"
 
@@ -14,6 +15,7 @@ type Metadata struct {
 type MetadataRepository interface {
 	Get(bucket string, name string) (*model.Metadata, error)
 	Insert(*model.Metadata) error
+	InsertTx(tx *sql.Tx, obj *model.Metadata) error
 	Update(bucket, name, storageClass string, size int64, updated time.Time) error
 	Delete(bucket, name string) error
 }
@@ -36,6 +38,31 @@ func (m *Metadata) Get(bucket, name string) (*model.Metadata, error) {
 		return nil, err
 	}
 	return &metadata, nil
+}
+
+// InsertTx inserts metadata object into a transaction
+func (m *Metadata) InsertTx(tx *sql.Tx, obj *model.Metadata) error {
+	query := `
+		INSERT INTO metadata 
+		(bucket, name, size, parent, storage_class, created, updated)	
+		VALUES (?, ?, ?, ?, ?, ?, ?);
+	`
+
+	if len(obj.Bucket) == 0 || len(obj.Name) == 0 {
+		return errors.New("bucket or name argument is empty")
+	}
+
+	if _, err := tx.Exec(query,
+		obj.Bucket,
+		obj.Name,
+		obj.Size,
+		getParentDir(obj.Name),
+		obj.StorageClass,
+		obj.Created,
+		obj.Updated); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *Metadata) Insert(obj *model.Metadata) error {

@@ -53,8 +53,8 @@ func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metada
 			parent
 		FROM directory
 		WHERE
-			parent = $1 OR
-			name = $1
+			(parent = $1 OR name = $1) AND
+			size > 0
 		UNION ALL
 		SELECT 
 			name, 

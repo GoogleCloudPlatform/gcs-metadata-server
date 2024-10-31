@@ -52,11 +52,7 @@ func main() {
 		log.Fatalf("Error creating storage client: %v\n", err)
 	}
 
-	// Instantiate repositories
-	directoryRepo := repo.NewDirectoryRepository(db)
-	metadataRepo := repo.NewMetadataRepository(db)
-
-	seedService := seeder.NewSeedService(client, opts.BucketId, directoryRepo, metadataRepo)
+	seedService := seeder.NewSeedService(client, opts.BucketId, db, 10000, 10*time.Second)
 
 	// Begin seeding
 	start := time.Now()

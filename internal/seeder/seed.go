@@ -3,7 +3,8 @@ package seeder
 import (
 	"context"
 	"fmt"
-	"log"
+	"sync"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/GoogleCloudPlatform/gcs-metadata-server/internal/model"
@@ -16,14 +17,14 @@ type SeedService struct {
 	bucketId      string
 	directoryRepo repo.DirectoryRepository
 	metadataRepo  repo.MetadataRepository
+	batchWriter   *repo.BatchWriter
 }
 
-func NewSeedService(client *storage.Client, bucketId string, directoryRepo repo.DirectoryRepository, metadataRepo repo.MetadataRepository) *SeedService {
+func NewSeedService(client *storage.Client, bucketId string, db *repo.Database, batchSize int, flushInterval time.Duration) *SeedService {
 	return &SeedService{
-		client:        client,
-		bucketId:      bucketId,
-		directoryRepo: directoryRepo,
-		metadataRepo:  metadataRepo,
+		client:      client,
+		bucketId:    bucketId,
+		batchWriter: repo.NewBatchWriter(db, batchSize, flushInterval),
 	}
 }
 
@@ -49,11 +50,59 @@ func (s *SeedService) Start(ctx context.Context) error {
 		return err
 	}
 
-	it := b.Objects(ctx, nil)
-	if err := s.insertFromIterator(it); err != nil {
+	// Start the batch writer
+	s.batchWriter.Start(ctx)
+	defer s.batchWriter.Stop()
+
+	if err := s.seed(ctx, b); err != nil {
 		return err
 	}
+
 	return nil
+}
+
+// seed traverses the bucket recursively and sends directories to the worker pool.
+func (s *SeedService) seed(ctx context.Context, b *storage.BucketHandle) error {
+	dirChan := make(chan string)
+	var wg sync.WaitGroup
+
+	semaphore := make(chan struct{}, 1000)
+
+	// Start with the root directory
+	wg.Add(1)
+	semaphore <- struct{}{}
+	go s.traverseDirectory(ctx, b, "", dirChan, &wg, semaphore)
+
+	wg.Wait()
+	close(dirChan)
+
+	return nil
+}
+
+func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHandle, dir string, dirChan chan<- string, wg *sync.WaitGroup, semaphore chan struct{}) {
+	defer wg.Done()
+	defer func() { <-semaphore }() // Release after the recursive call finishes
+
+	it := b.Objects(ctx, &storage.Query{Prefix: dir, Delimiter: "/", IncludeFoldersAsPrefixes: true})
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			fmt.Printf("Error iterating through objects: %v\n", err)
+			return // Stop listing directories on error
+		}
+
+		if attrs.Prefix != "" {
+			wg.Add(1)
+			semaphore <- struct{}{}
+
+			go s.traverseDirectory(ctx, b, attrs.Prefix, dirChan, wg, semaphore)
+		} else {
+			s.batchWriter.Add(newMetadata(attrs))
+		}
+	}
 }
 
 // insertFromIterator traverses iterator while inserting all containing items into db
@@ -68,14 +117,9 @@ func (s *SeedService) insertFromIterator(it objectIterator) error {
 			return fmt.Errorf("error retrieving iterator object: %v", err)
 		}
 
-		metadata := newMetadata(obj)
-
-		if err := s.metadataRepo.Insert(metadata); err != nil {
-			log.Printf("Error inserting metadata: %v", err)
-		}
-
-		if err := s.directoryRepo.UpsertParentDirs(repo.StorageClass(metadata.StorageClass), metadata.Bucket, metadata.Name, metadata.Size, 1); err != nil {
-			log.Printf("Error upserting directories: %v", err)
+		if obj.Name != "" {
+			// Add metadata to the batch writer
+			s.batchWriter.Add(newMetadata(obj))
 		}
 	}
 	return nil

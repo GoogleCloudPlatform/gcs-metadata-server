@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -16,6 +17,7 @@ type DirectoryRepository interface {
 	Insert(dir model.Directory) error
 	Delete(bucket string, name string) error
 	UpsertParentDirs(storageClass StorageClass, bucket string, objName string, newSize int64, newCount int64) error
+	UpsertParentDirsTx(tx *sql.Tx, storageClass StorageClass, bucket string, objName string, newSize int64, newCount int64) error
 	UpsertArchiveParentDirs(oldStorageClass StorageClass, newStorageClass StorageClass, bucket, objName string, size int64) error
 }
 
@@ -83,6 +85,39 @@ func (d *Directory) UpsertArchiveParentDirs(oldStorageClass StorageClass, newSto
 	}
 
 	return tx.Commit()
+}
+
+// UpsertParentDirs updates all parent directories of an object name in one transaction
+func (d *Directory) UpsertParentDirsTx(tx *sql.Tx, storageClass StorageClass, bucket string, objName string, newSize int64, newCount int64) error {
+	storageColumn := "size_" + strings.ToLower(string(storageClass))
+	query := fmt.Sprintf(`
+			INSERT INTO directory (bucket, name, %[1]s, count, parent)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT(bucket, name)
+			DO UPDATE
+			SET %[1]s = %[1]s + $3,
+				count = count + $4;
+	`, storageColumn)
+
+	if len(bucket) == 0 || len(objName) == 0 {
+		return errors.New("bucket or name argument is empty")
+	}
+
+	dirName := getParentDir(objName)
+
+	for {
+		if _, err := tx.Exec(query, bucket, dirName, newSize, newCount, getParentDir(dirName)); err != nil {
+			return err
+		}
+
+		// Last directory to update is root
+		if dirName == "/" {
+			break
+		}
+		dirName = getParentDir(dirName)
+	}
+
+	return nil
 }
 
 // UpsertParentDirs updates all parent directories of an object name in one transaction
