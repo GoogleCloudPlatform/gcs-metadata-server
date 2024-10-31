@@ -61,7 +61,7 @@ func (s *SeedService) Start(ctx context.Context) error {
 	return nil
 }
 
-// seed traverses the bucket recursively and sends directories to the worker pool.
+// seed traverses the bucket recursively while sending messages to batch writer
 func (s *SeedService) seed(ctx context.Context, b *storage.BucketHandle) error {
 	dirChan := make(chan string)
 	var wg sync.WaitGroup
@@ -71,7 +71,7 @@ func (s *SeedService) seed(ctx context.Context, b *storage.BucketHandle) error {
 	// Start with the root directory
 	wg.Add(1)
 	semaphore <- struct{}{}
-	go s.traverseDirectory(ctx, b, "", dirChan, &wg, semaphore)
+	go s.traverseRecursive(ctx, b, "", dirChan, &wg, semaphore)
 
 	wg.Wait()
 	close(dirChan)
@@ -98,7 +98,7 @@ func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHa
 			wg.Add(1)
 			semaphore <- struct{}{}
 
-			go s.traverseDirectory(ctx, b, attrs.Prefix, dirChan, wg, semaphore)
+			go s.traverseRecursive(ctx, b, attrs.Prefix, dirChan, wg, semaphore)
 		} else {
 			s.batchWriter.Add(newMetadata(attrs))
 		}
