@@ -29,7 +29,7 @@ func NewExploreRepository(db *Database) ExploreRepository {
 	return &Explore{db}
 }
 
-// GetPath retrieves all directory contents of a given path including itself
+// GetPathContents retrieves all directory contents of a given path including itself
 // It excludes directories whose size is 0
 func (e *Explore) GetPathContents(path string, sortBy SortType) ([]*model.Metadata, error) {
 	if path == "" {

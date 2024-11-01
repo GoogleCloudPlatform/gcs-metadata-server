@@ -3,6 +3,7 @@ package seeder
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -70,8 +71,7 @@ func (s *SeedService) seed(ctx context.Context, b *storage.BucketHandle) error {
 
 	// Start with the root directory
 	wg.Add(1)
-	semaphore <- struct{}{}
-	go s.traverseRecursive(ctx, b, "", dirChan, &wg, semaphore)
+	go s.traverseRecursive(ctx, b, "", &wg, semaphore)
 
 	wg.Wait()
 	close(dirChan)
@@ -80,8 +80,10 @@ func (s *SeedService) seed(ctx context.Context, b *storage.BucketHandle) error {
 }
 
 // traverseRecursive iterates through bucket directories and invokes a new goroutine for each new directory found
-func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHandle, dir string, dirChan chan<- string, wg *sync.WaitGroup, semaphore chan struct{}) {
+func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHandle, dir string, wg *sync.WaitGroup, semaphore chan struct{}) {
 	defer wg.Done()
+
+	semaphore <- struct{}{}
 	defer func() { <-semaphore }()
 
 	it := b.Objects(ctx, &storage.Query{Prefix: dir, Delimiter: "/", IncludeFoldersAsPrefixes: true})
@@ -91,17 +93,22 @@ func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHa
 			break
 		}
 		if err != nil {
-			fmt.Printf("Error iterating through objects: %v\n", err)
+			log.Printf("Error iterating through objects: %v\n", err)
 			return
 		}
 
 		if attrs.Prefix != "" {
 			wg.Add(1)
-			semaphore <- struct{}{}
+			go func() {
+				s.traverseRecursive(ctx, b, attrs.Prefix, wg, semaphore)
+			}()
 
-			go s.traverseRecursive(ctx, b, attrs.Prefix, dirChan, wg, semaphore)
 		} else {
-			s.batchWriter.Add(newMetadata(attrs))
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				s.batchWriter.Add(newMetadata(attrs))
+			}()
 		}
 	}
 }
