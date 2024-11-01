@@ -20,7 +20,7 @@ type options struct {
 const (
 	maxDbConnections = 1
 	maxSemaphores    = 1000
-	flushInterval    = 10 * time.Second
+	flushInterval    = 1 * time.Second
 	batchSize        = 10000
 )
 

@@ -2,7 +2,6 @@ package seeder
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -19,6 +18,8 @@ type SeedService struct {
 	batchWriter   repo.BatchWriterRepository
 	maxSemaphores int
 }
+
+const rootDir = ""
 
 func NewSeedService(client *storage.Client, bucketId string, db *repo.Database, maxSemaphores, batchSize int, flushInterval time.Duration) *SeedService {
 	return &SeedService{
@@ -38,10 +39,6 @@ func newMetadata(obj *storage.ObjectAttrs) *model.Metadata {
 		Created:      obj.Created,
 		Updated:      obj.Updated,
 	}
-}
-
-type objectIterator interface {
-	Next() (*storage.ObjectAttrs, error)
 }
 
 // Seed initiates the seeding process by traversing bucket and inserting into db
@@ -64,22 +61,20 @@ func (s *SeedService) Start(ctx context.Context) error {
 
 // seed traverses the bucket recursively while sending messages to batch writer
 func (s *SeedService) seed(ctx context.Context, b *storage.BucketHandle) error {
-	dirChan := make(chan string)
 	var wg sync.WaitGroup
 
 	semaphore := make(chan struct{}, s.maxSemaphores)
 
-	// Start with the root directory
-	wg.Add(1)
-	go s.traverseRecursive(ctx, b, "", &wg, semaphore)
+	// Start with the root directory until no more directories are found
+	wg.Add(1) // Prevent race condition by allocating waitgroup in advance
+	go s.traverseRecursive(ctx, b, rootDir, &wg, semaphore)
 
 	wg.Wait()
-	close(dirChan)
-
 	return nil
 }
 
 // traverseRecursive iterates through bucket directories and invokes a new goroutine for each new directory found
+// and a new goroutine to do a batch insert for each new object found
 func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHandle, dir string, wg *sync.WaitGroup, semaphore chan struct{}) {
 	defer wg.Done()
 
@@ -99,10 +94,7 @@ func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHa
 
 		if attrs.Prefix != "" {
 			wg.Add(1)
-			go func() {
-				s.traverseRecursive(ctx, b, attrs.Prefix, wg, semaphore)
-			}()
-
+			go s.traverseRecursive(ctx, b, attrs.Prefix, wg, semaphore)
 		} else {
 			wg.Add(1)
 			go func() {
@@ -111,23 +103,4 @@ func (s *SeedService) traverseRecursive(ctx context.Context, b *storage.BucketHa
 			}()
 		}
 	}
-}
-
-// insertFromIterator traverses iterator while inserting all containing items into db
-func (s *SeedService) insertFromIterator(it objectIterator) error {
-	for {
-		obj, err := it.Next()
-		if err != nil {
-			if err == iterator.Done {
-				break
-			}
-			return fmt.Errorf("error retrieving iterator object: %v", err)
-		}
-
-		if obj.Name != "" {
-			// Add metadata to the batch writer
-			s.batchWriter.Add(newMetadata(obj))
-		}
-	}
-	return nil
 }
